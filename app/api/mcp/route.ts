@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { sessions } from '@/lib/sessions';
 import { transports, createMcpServer } from '@/lib/mcp-server';
+import { decryptTokenSet } from '@/lib/crypto';
 import type { TokenSet } from '@/lib/oauth';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 function getTokens(req: NextRequest): TokenSet | null {
   const auth = req.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) return null;
-  return sessions.get(auth.slice(7)) ?? null;
+  return decryptTokenSet(auth.slice(7));
 }
 
 function unauthorized() {

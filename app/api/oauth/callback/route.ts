@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { OAuthManager } from '@/lib/oauth';
-import { sessions, saveSessions } from '@/lib/sessions';
+import { encryptTokenSet } from '@/lib/crypto';
 
 const oauth = new OAuthManager({
   appUid: process.env.CS_APP_UID!,
@@ -25,9 +24,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const tokens = await oauth.exchangeCode(code);
-    const sessionId = randomUUID();
-    sessions.set(sessionId, tokens);
-    saveSessions(sessions);
+    // Encrypt the full token set into the session token — no file storage needed
+    const sessionToken = encryptTokenSet(tokens);
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? `https://${req.headers.get('host')}`;
 
@@ -38,21 +36,21 @@ export async function GET(req: NextRequest) {
   <style>
     body { font-family: system-ui, sans-serif; max-width: 680px; margin: 60px auto; padding: 0 20px; color: #222; }
     .token { background: #f0fdf4; border: 1px solid #86efac; padding: 16px; border-radius: 6px;
-             font-family: monospace; font-size: 0.95em; word-break: break-all; }
-    pre  { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto; }
+             font-family: monospace; font-size: 0.75em; word-break: break-all; }
+    pre  { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
   </style>
 </head>
 <body>
   <h1>✓ Authorized successfully</h1>
   <p>Your session token (treat this like a password):</p>
-  <div class="token">${sessionId}</div>
+  <div class="token">${sessionToken}</div>
   <h2>Connect an MCP client</h2>
   <pre>{
   "mcpServers": {
     "contentstack": {
       "url": "${baseUrl}/api/mcp",
       "headers": {
-        "Authorization": "Bearer ${sessionId}"
+        "Authorization": "Bearer ${sessionToken}"
       }
     }
   }
