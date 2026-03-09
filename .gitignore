@@ -1,0 +1,6 @@
+node_modules/
+dist/
+
+# Secrets — never commit these
+.env
+.sessions.json
