@@ -15,16 +15,23 @@ function getTokens(req: NextRequest): TokenSet | null {
   return decryptTokenSet(auth.slice(7));
 }
 
-function unauthorized() {
+function unauthorized(req: NextRequest) {
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? `https://${req.headers.get('host')}`;
   return NextResponse.json(
-    { error: 'Unauthorized', message: 'Visit /api/oauth/authorize to get a session token' },
-    { status: 401 }
+    { error: 'unauthorized', error_description: 'Valid Bearer token required' },
+    {
+      status: 401,
+      headers: {
+        'WWW-Authenticate': `Bearer realm="${base}", error="invalid_token"`,
+        'Link': `<${base}/.well-known/oauth-protected-resource>; rel="oauth-protected-resource"`,
+      },
+    }
   );
 }
 
 export async function POST(req: NextRequest) {
   const tokens = getTokens(req);
-  if (!tokens) return unauthorized();
+  if (!tokens) return unauthorized(req);
 
   const body = await req.json();
   const mcpSessionId = req.headers.get('mcp-session-id') ?? undefined;

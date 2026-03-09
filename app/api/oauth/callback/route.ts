@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { OAuthManager } from '@/lib/oauth';
 import { encryptTokenSet } from '@/lib/crypto';
+import { pendingAuths, pendingTokens } from '@/lib/pending-auth';
 
 const oauth = new OAuthManager({
   appUid: process.env.CS_APP_UID!,
@@ -13,6 +15,7 @@ const oauth = new OAuthManager({
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code  = searchParams.get('code');
+  const state = searchParams.get('state') ?? '';
   const error = searchParams.get('error');
 
   if (error) {
@@ -22,13 +25,34 @@ export async function GET(req: NextRequest) {
     return new NextResponse('<h2>Missing authorization code.</h2>', { status: 400, headers: { 'Content-Type': 'text/html' } });
   }
 
+  // Look up the pending auth for this state
+  const pending = pendingAuths.get(state);
+  pendingAuths.delete(state);
+
   try {
     const tokens = await oauth.exchangeCode(code);
-    // Encrypt the full token set into the session token — no file storage needed
-    const sessionToken = encryptTokenSet(tokens);
+    const encryptedToken = encryptTokenSet(tokens);
 
+    // If there's a client waiting (MCP OAuth flow), redirect back with a short-lived code
+    if (pending && pending.clientRedirectUri && pending.clientRedirectUri !== `${process.env.NEXT_PUBLIC_BASE_URL}/api/oauth/callback-done`) {
+      const ourCode = randomUUID();
+      pendingTokens.set(ourCode, {
+        encryptedToken,
+        codeChallenge: pending.codeChallenge,
+        codeChallengeMethod: pending.codeChallengeMethod,
+        clientRedirectUri: pending.clientRedirectUri,
+      });
+      // Expire after 5 minutes
+      setTimeout(() => pendingTokens.delete(ourCode), 5 * 60 * 1000);
+
+      const redirectUrl = new URL(pending.clientRedirectUri);
+      redirectUrl.searchParams.set('code', ourCode);
+      if (pending.clientState) redirectUrl.searchParams.set('state', pending.clientState);
+      return NextResponse.redirect(redirectUrl.toString());
+    }
+
+    // Direct browser visit — show the token to the user
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? `https://${req.headers.get('host')}`;
-
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -43,14 +67,14 @@ export async function GET(req: NextRequest) {
 <body>
   <h1>✓ Authorized successfully</h1>
   <p>Your session token (treat this like a password):</p>
-  <div class="token">${sessionToken}</div>
-  <h2>Connect an MCP client</h2>
+  <div class="token">${encryptedToken}</div>
+  <h2>Connect an MCP client manually</h2>
   <pre>{
   "mcpServers": {
     "contentstack": {
       "url": "${baseUrl}/api/mcp",
       "headers": {
-        "Authorization": "Bearer ${sessionToken}"
+        "Authorization": "Bearer ${encryptedToken}"
       }
     }
   }
@@ -58,7 +82,6 @@ export async function GET(req: NextRequest) {
   <p><a href="/">← Back to home</a></p>
 </body>
 </html>`;
-
     return new NextResponse(html, { headers: { 'Content-Type': 'text/html' } });
   } catch (err) {
     return new NextResponse(`<h2>Token exchange failed.</h2><pre>${err}</pre>`, {
