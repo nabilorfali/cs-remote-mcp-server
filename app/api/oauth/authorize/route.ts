@@ -21,7 +21,7 @@ export function GET(req: NextRequest) {
 
   if (!clientRedirectUri) {
     // No client redirect_uri — this is a direct browser visit, show simple page
-    const base = process.env.NEXT_PUBLIC_BASE_URL ?? `https://${req.headers.get('host')}`;
+    const base = `https://${req.headers.get('host')}`;
     const state = randomUUID();
     // Store a dummy pending auth that redirects back to our callback page
     pendingAuths.set(state, {

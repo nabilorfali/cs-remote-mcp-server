@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
     const encryptedToken = encryptTokenSet(tokens);
 
     // If there's a client waiting (MCP OAuth flow), redirect back with a short-lived code
-    if (pending && pending.clientRedirectUri && pending.clientRedirectUri !== `${process.env.NEXT_PUBLIC_BASE_URL}/api/oauth/callback-done`) {
+    const base = `https://${req.headers.get('host')}`;
+    if (pending && pending.clientRedirectUri && pending.clientRedirectUri !== `${base}/api/oauth/callback-done`) {
       const ourCode = randomUUID();
       pendingTokens.set(ourCode, {
         encryptedToken,
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Direct browser visit — show the token to the user
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? `https://${req.headers.get('host')}`;
+    const baseUrl = base;
     const html = `<!DOCTYPE html>
 <html>
 <head>

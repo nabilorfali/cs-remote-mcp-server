@@ -16,7 +16,7 @@ function getTokens(req: NextRequest): TokenSet | null {
 }
 
 function unauthorized(req: NextRequest) {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? `https://${req.headers.get('host')}`;
+  const base = `https://${req.headers.get('host')}`;
   return NextResponse.json(
     { error: 'unauthorized', error_description: 'Valid Bearer token required' },
     {
